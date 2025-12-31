@@ -1,12 +1,10 @@
 /**
+ * api/visit.js
  * 处理博客前端的访问统计请求
- * 路径: /api/visit?url=...
  */
 export async function onRequest({ request, env }) {
   // 1. 跨域配置
-  // 普通环境变量通常仍在 env 对象中，如果没有，可尝试直接使用 ALLOWED_ORIGIN
   const allowOrigin = env.ALLOWED_ORIGIN || "*";
-  
   const corsHeaders = {
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Methods": "GET, OPTIONS",
@@ -17,19 +15,14 @@ export async function onRequest({ request, env }) {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // === 2. 关键修正：检查全局 KV 绑定 ===
-  // 注意：KV 绑定 "BLOG_DB" 通常直接作为全局变量注入，而不是在 env 中
+  // 2. 获取全局 KV 绑定
+  // EdgeOne 允许直接访问绑定的全局变量，无需从 env 获取
   let db;
   try {
-    // 尝试访问全局变量 BLOG_DB
-    // @ts-ignore (忽略 TypeScript 对全局变量的检查)
-    db = BLOG_DB; 
+    /* global BLOG_DB */ // 声明全局变量以通过语法检查
+    db = BLOG_DB;
   } catch (e) {
-    // 捕获 ReferenceError: BLOG_DB is not defined
-    console.error("致命错误: 全局变量 BLOG_DB 未定义。请检查 KV 绑定名称是否为 'BLOG_DB'。");
-    return new Response(JSON.stringify({ 
-      error: "Server Configuration Error: KV Binding 'BLOG_DB' not found." 
-    }), {
+    return new Response(JSON.stringify({ error: "Global KV 'BLOG_DB' not found" }), {
       status: 500,
       headers: { "Content-Type": "application/json", ...corsHeaders }
     });
@@ -46,18 +39,19 @@ export async function onRequest({ request, env }) {
   }
 
   try {
-    const pageKey = encodeKey(targetPath);
+    // === 关键：使用定制的编码函数 ===
+    const pageKey = encodePageKey(targetPath);
     const siteKey = "site_total_pv";
 
-    // 3. 使用 db (即全局 BLOG_DB) 进行读写
     const [sitePvStr, pagePvStr] = await Promise.all([
       db.get(siteKey),
       db.get(pageKey)
     ]);
 
-    const newSitePv = (parseInt(sitePvStr) || 0) + 1;
-    const newPagePv = (parseInt(pagePvStr) || 0) + 1;
+    const newSitePv = (Number(sitePvStr) || 0) + 1;
+    const newPagePv = (Number(pagePvStr) || 0) + 1;
 
+    // 写入数据
     await Promise.all([
       db.put(siteKey, String(newSitePv)),
       db.put(pageKey, String(newPagePv))
@@ -68,8 +62,7 @@ export async function onRequest({ request, env }) {
     });
 
   } catch (err) {
-    console.error(`KV 操作失败: ${err.message}`);
-    return new Response(JSON.stringify({ error: `Internal Error: ${err.message}` }), {
+    return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
       headers: { "Content-Type": "application/json", ...corsHeaders }
     });
@@ -77,17 +70,49 @@ export async function onRequest({ request, env }) {
 }
 
 /**
- * 核心转码函数 (TextEncoder 版本)
+ * 核心编码函数
+ * 目标：/college-study/STEM/传感器 -> _college_study_STEM_Base64(传感器)
+ * 限制：Key 仅支持 [a-zA-Z0-9_:]
  */
-function encodeKey(path) {
-  if (path.length > 1 && path.endsWith('/')) {
-    path = path.slice(0, -1);
-  }
-  let processed = path.replace(/[/\.]/g, '_');
-  return processed.replace(/[^a-zA-Z0-9_:]+/g, (match) => {
-    const bytes = new TextEncoder().encode(match);
-    const binString = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
-    const b64 = btoa(binString);
-    return 'B_' + b64.replace(/\+/g, ':A').replace(/\//g, ':B').replace(/=/g, '');
+function encodePageKey(path) {
+  if (!path) return "root";
+  
+  // 1. 清理后缀和尾部斜杠
+  let processed = path;
+  if (processed.endsWith('.html')) processed = processed.slice(0, -5);
+  if (processed.endsWith('/')) processed = processed.slice(0, -1);
+  if (!processed.startsWith('/')) processed = '/' + processed;
+
+  // 2. 分割路径
+  const segments = processed.split('/').filter(Boolean);
+
+  // 3. 处理每一段
+  const encodedSegments = segments.map(seg => {
+    // 检查是否仅包含允许的“常规”字符 (字母、数字)
+    // 注意：连字符 '-' 也不在你的允许列表中，所以这里我们把它也视为需要处理的，或者转为下划线
+    // 如果你希望保留英文单词间的连字符为可读，建议将其转为下划线
+    if (/^[a-zA-Z0-9]+$/.test(seg)) {
+      return seg;
+    }
+    
+    // 如果包含连字符，替换为下划线保留可读性 (可选)
+    if (/^[a-zA-Z0-9\-]+$/.test(seg)) {
+      return seg.replace(/-/g, '_');
+    }
+
+    // 4. 中文或其他特殊字符：Base64 编码
+    // 使用 UTF-8 转码
+    const utf8Bytes = new TextEncoder().encode(seg);
+    let b64 = btoa(String.fromCharCode(...utf8Bytes));
+    
+    // 5. Base64 清洗：替换 Key 不支持的字符 (+ / =)
+    // 映射规则：+ -> :A, / -> :B, = -> (去掉)
+    b64 = b64.replace(/\+/g, ':A').replace(/\//g, ':B').replace(/=/g, '');
+    
+    // 添加前缀标识以便解码（可选，但推荐，防止混淆）
+    return `B64:${b64}`;
   });
+
+  // 6. 用下划线连接
+  return '_' + encodedSegments.join('_');
 }
