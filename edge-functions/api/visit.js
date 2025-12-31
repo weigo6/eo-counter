@@ -3,19 +3,36 @@
  * 路径: /api/visit?url=...
  */
 export async function onRequest({ request, env }) {
-  // === 1. 从环境变量获取允许的域名 ===
-  // 如果没设置环境变量，默认回退到 "*" (不安全，仅用于测试)
+  // 1. 跨域配置
+  // 普通环境变量通常仍在 env 对象中，如果没有，可尝试直接使用 ALLOWED_ORIGIN
   const allowOrigin = env.ALLOWED_ORIGIN || "*";
-
+  
   const corsHeaders = {
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Methods": "GET, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   };
 
-  // 处理预检请求
   if (request.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // === 2. 关键修正：检查全局 KV 绑定 ===
+  // 注意：KV 绑定 "BLOG_DB" 通常直接作为全局变量注入，而不是在 env 中
+  let db;
+  try {
+    // 尝试访问全局变量 BLOG_DB
+    // @ts-ignore (忽略 TypeScript 对全局变量的检查)
+    db = BLOG_DB; 
+  } catch (e) {
+    // 捕获 ReferenceError: BLOG_DB is not defined
+    console.error("致命错误: 全局变量 BLOG_DB 未定义。请检查 KV 绑定名称是否为 'BLOG_DB'。");
+    return new Response(JSON.stringify({ 
+      error: "Server Configuration Error: KV Binding 'BLOG_DB' not found." 
+    }), {
+      status: 500,
+      headers: { "Content-Type": "application/json", ...corsHeaders }
+    });
   }
 
   const urlObj = new URL(request.url);
@@ -29,22 +46,21 @@ export async function onRequest({ request, env }) {
   }
 
   try {
-    // 生成 Key
     const pageKey = encodeKey(targetPath);
     const siteKey = "site_total_pv";
 
-    // 读写逻辑不变
+    // 3. 使用 db (即全局 BLOG_DB) 进行读写
     const [sitePvStr, pagePvStr] = await Promise.all([
-      env.BLOG_DB.get(siteKey),
-      env.BLOG_DB.get(pageKey)
+      db.get(siteKey),
+      db.get(pageKey)
     ]);
 
     const newSitePv = (parseInt(sitePvStr) || 0) + 1;
     const newPagePv = (parseInt(pagePvStr) || 0) + 1;
 
     await Promise.all([
-      env.BLOG_DB.put(siteKey, String(newSitePv)),
-      env.BLOG_DB.put(pageKey, String(newPagePv))
+      db.put(siteKey, String(newSitePv)),
+      db.put(pageKey, String(newPagePv))
     ]);
 
     return new Response(JSON.stringify({ total: newSitePv, page: newPagePv }), {
@@ -52,7 +68,8 @@ export async function onRequest({ request, env }) {
     });
 
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
+    console.error(`KV 操作失败: ${err.message}`);
+    return new Response(JSON.stringify({ error: `Internal Error: ${err.message}` }), {
       status: 500,
       headers: { "Content-Type": "application/json", ...corsHeaders }
     });
@@ -60,32 +77,17 @@ export async function onRequest({ request, env }) {
 }
 
 /**
- * 核心转码函数 (现代化版本)
- * 移除 unescape，使用 TextEncoder
+ * 核心转码函数 (TextEncoder 版本)
  */
 function encodeKey(path) {
   if (path.length > 1 && path.endsWith('/')) {
     path = path.slice(0, -1);
   }
-
-  // 1. 将常规分隔符换成下划线
   let processed = path.replace(/[/\.]/g, '_');
-
-  // 2. 正则匹配非法字符（非字母数字下划线冒号）
   return processed.replace(/[^a-zA-Z0-9_:]+/g, (match) => {
-    
-    // === 关键修改：使用 TextEncoder 替代 unescape ===
-    // 1. 将 UTF-8 字符串转为 Uint8Array 字节流
     const bytes = new TextEncoder().encode(match);
-    
-    // 2. 将字节流转为二进制字符串 (btoa 需要这种格式)
-    // 使用 Array.from 避免大数组导致栈溢出
     const binString = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
-    
-    // 3. 转 Base64
     const b64 = btoa(binString);
-
-    // 4. 清洗 Base64 中的非法 KV 字符 (+, /, =)
     return 'B_' + b64.replace(/\+/g, ':A').replace(/\//g, ':B').replace(/=/g, '');
   });
 }

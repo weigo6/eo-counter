@@ -1,56 +1,62 @@
 /**
- * 管理后台 API，用于获取列表、删除、更新
- * 需要密码验证
+ * 管理后台 API
  */
 export async function onRequest({ request, env }) {
   // 1. 权限验证
   const authHeader = request.headers.get("X-Auth-Token");
+  // 环境变量通常还是在 env 中
   if (authHeader !== env.DASHBOARD_PWD) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
   }
 
+  // === 获取全局 DB 对象 ===
+  let db;
+  try {
+    // @ts-ignore
+    db = BLOG_DB;
+  } catch (e) {
+    return new Response(JSON.stringify({ error: "KV Binding 'BLOG_DB' not found" }), { status: 500 });
+  }
+
   const url = new URL(request.url);
-  const action = url.searchParams.get("action"); // list, update, delete
+  const action = url.searchParams.get("action");
   
   try {
-    // === 获取列表 ===
     if (action === "list") {
       const cursor = url.searchParams.get("cursor") || undefined;
       const limit = 20;
-      // 这里的 list 方法返回结构 { keys: [{name: "key1"}, ...], list_complete: bool, cursor: "..." }
-      // 注意：EdgeOne Pages 的 KV list 返回结构可能略有不同，以实际运行为准，通常包含 keys 数组
-      const result = await env.BLOG_DB.list({ limit, cursor });
       
-      // 批量获取值（KV list 只返回 key 名称，不返回 value，需要额外查询）
-      // 为了性能，列表页可以只显示 key，或者并发查询 value
-      const keys = result.keys;
+      // 使用 db.list
+      const result = await db.list({ limit, cursor });
+      
+      const keys = result.keys || []; // 确保 keys 存在
       const dataWithValues = await Promise.all(keys.map(async (k) => {
-        const val = await env.BLOG_DB.get(k.name);
+        const val = await db.get(k.name);
         return { key: k.name, value: val };
       }));
 
       return new Response(JSON.stringify({
         data: dataWithValues,
         cursor: result.cursor,
-        complete: result.list_complete
+        complete: result.list_complete // 注意：字段名可能因 SDK 版本不同而异，EdgeOne文档是 list_complete 或 complete
       }));
     }
 
-    // === 更新/修改数据 ===
     if (action === "update" && request.method === "POST") {
-      const body = await request.json(); // { key: "...", value: "..." }
-      if (!body.key || !body.value) throw new Error("Missing key or value");
+      const body = await request.json();
+      if (!body.key || body.value === undefined) throw new Error("Missing key or value");
       
-      await env.BLOG_DB.put(body.key, String(body.value));
+      // 使用 db.put
+      await db.put(body.key, String(body.value));
       return new Response(JSON.stringify({ success: true }));
     }
 
-    // === 删除数据 ===
     if (action === "delete" && request.method === "POST") {
-      const body = await request.json(); // { key: "..." }
+      const body = await request.json();
       if (!body.key) throw new Error("Missing key");
       
-      await env.BLOG_DB.delete(body.key);
+      // 使用 db.delete
+      await db.delete(body.key);
       return new Response(JSON.stringify({ success: true }));
     }
 
