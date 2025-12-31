@@ -1,0 +1,22 @@
+{
+  "name": "blog-stats-monitor",
+  "nodeVersion": "20.18.0",
+  "outputDirectory": "public",
+  "buildCommand": "echo 'No build required'",
+  "installCommand": "echo 'No dependencies to install'",
+  "headers": [
+    {
+      "source": "/admin/*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        }
+      ]
+    }
+  ]
+}

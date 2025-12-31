@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>流量监控大屏</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #f0f2f5; padding: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 24px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        h1 { margin-top: 0; }
+        .login-box { text-align: center; margin-top: 50px; }
+        input { padding: 8px; border: 1px solid #ddd; border-radius: 4px; width: 200px; }
+        button { padding: 8px 16px; background: #0052d9; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #003cab; }
+        button.danger { background: #d54941; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
+        th { background: #fafafa; }
+        .key-cell { font-family: monospace; color: #666; font-size: 12px; word-break: break-all; }
+        .url-cell { color: #0052d9; font-weight: 500; }
+        .pagination { margin-top: 20px; text-align: center; }
+    </style>
+</head>
+<body>
+
+<div class="container" id="app">
+    <!-- 登录视图 -->
+    <div v-if="!isLoggedIn" class="login-box">
+        <h2>管理员登录</h2>
+        <input type="password" v-model="password" placeholder="请输入 ADMIN_PASSWORD" @keyup.enter="login">
+        <button @click="login">进入</button>
+    </div>
+
+    <!-- 数据视图 -->
+    <div v-else>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h1>访问数据管理</h1>
+            <button @click="logout" style="background:#888">退出</button>
+        </div>
+        
+        <div v-if="loading">加载中...</div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 40%">原始路径 (解码推测)</th>
+                    <th style="width: 30%">KV Key</th>
+                    <th style="width: 10%">PV</th>
+                    <th style="width: 20%">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="item in items" :key="item.key">
+                    <td>
+                        <div class="url-cell">{{ decodeKey(item.key) }}</div>
+                    </td>
+                    <td class="key-cell">{{ item.key }}</td>
+                    <td>
+                        <input type="number" v-model="item.newValue" style="width: 60px" />
+                    </td>
+                    <td>
+                        <button @click="updateItem(item)">保存</button>
+                        <button class="danger" @click="deleteItem(item.key)">删除</button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="pagination">
+            <button v-if="!complete" @click="loadMore">加载更多</button>
+            <span v-else style="color:#999">已加载全部数据</span>
+        </div>
+    </div>
+</div>
+
+<!-- 引入 Vue3 简化开发 -->
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<script>
+    const { createApp, ref, onMounted } = Vue;
+
+    createApp({
+        setup() {
+            const isLoggedIn = ref(false);
+            const password = ref('');
+            const items = ref([]);
+            const cursor = ref(null);
+            const complete = ref(false);
+            const loading = ref(false);
+
+            // 检查本地存储的密码
+            onMounted(() => {
+                const stored = localStorage.getItem('dash_pwd');
+                if (stored) {
+                    password.value = stored;
+                    login();
+                }
+            });
+
+            const login = () => {
+                if (!password.value) return;
+                isLoggedIn.value = true;
+                localStorage.setItem('dash_pwd', password.value);
+                fetchData(true);
+            };
+
+            const logout = () => {
+                isLoggedIn.value = false;
+                password.value = '';
+                localStorage.removeItem('dash_pwd');
+                items.value = [];
+            };
+
+            // 获取数据
+            const fetchData = async (reset = false) => {
+                if (loading.value) return;
+                loading.value = true;
+                
+                try {
+                    let url = `/api/admin?action=list`;
+                    if (!reset && cursor.value) url += `&cursor=${cursor.value}`;
+                    
+                    const res = await fetch(url, {
+                        headers: { 'X-Auth-Token': password.value }
+                    });
+
+                    if (res.status === 401) {
+                        alert("密码错误");
+                        logout();
+                        return;
+                    }
+
+                    const data = await res.json();
+                    
+                    // 为每一项添加 newValue 字段用于编辑
+                    const newItems = data.data.map(i => ({...i, newValue: i.value}));
+                    
+                    if (reset) {
+                        items.value = newItems;
+                    } else {
+                        items.value = [...items.value, ...newItems];
+                    }
+                    
+                    cursor.value = data.cursor;
+                    complete.value = data.complete;
+
+                } catch (e) {
+                    console.error(e);
+                    alert("加载失败");
+                } finally {
+                    loading.value = false;
+                }
+            };
+
+            const loadMore = () => fetchData(false);
+
+            // 更新数据
+            const updateItem = async (item) => {
+                if (!confirm(`确定将数值修改为 ${item.newValue}?`)) return;
+                try {
+                    const res = await fetch('/api/admin?action=update', {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'X-Auth-Token': password.value 
+                        },
+                        body: JSON.stringify({ key: item.key, value: item.newValue })
+                    });
+                    if (res.ok) {
+                        item.value = item.newValue;
+                        alert("更新成功");
+                    } else {
+                        throw new Error();
+                    }
+                } catch(e) {
+                    alert("更新失败");
+                }
+            };
+
+            // 删除数据
+            const deleteItem = async (key) => {
+                if (!confirm("确定删除此记录?")) return;
+                try {
+                    const res = await fetch('/api/admin?action=delete', {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'X-Auth-Token': password.value 
+                        },
+                        body: JSON.stringify({ key })
+                    });
+                    if (res.ok) {
+                        items.value = items.value.filter(i => i.key !== key);
+                    }
+                } catch(e) {
+                    alert("删除失败");
+                }
+            };
+
+            // 解码 Key 以显示为可读 URL (现代化版本)
+            const decodeKey = (key) => {
+                if (key === 'site_total_pv') return '🏠 全站总访问量';
+                
+                try {
+                    // 匹配 B_ 开头的编码段
+                    return key.replace(/B_([a-zA-Z0-9:A:B]+)/g, (match, b64safe) => {
+                        // 1. 还原 Base64 特殊字符
+                        let b64 = b64safe.replace(/:A/g, '+').replace(/:B/g, '/');
+                        // 补齐 padding (=)
+                        while (b64.length % 4 !== 0) b64 += '=';
+                        
+                        try {
+                            // === 关键修改：使用 TextDecoder 替代 escape ===
+                            // 1. Base64 -> 二进制字符串
+                            const binString = atob(b64);
+                            // 2. 二进制字符串 -> Uint8Array
+                            const bytes = Uint8Array.from(binString, c => c.charCodeAt(0));
+                            // 3. Uint8Array -> UTF-8 字符串
+                            return new TextDecoder().decode(bytes);
+                        } catch (e) {
+                            return match;
+                        }
+                    }).replace(/_/g, '/');
+                } catch (e) {
+                    return key;
+                }
+            };
+
+            return {
+                isLoggedIn, password, login, logout,
+                items, loadMore, complete, loading,
+                updateItem, deleteItem, decodeKey
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
