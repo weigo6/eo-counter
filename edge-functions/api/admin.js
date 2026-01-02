@@ -1,121 +1,103 @@
 /**
  * api/admin.js
- * 管理后台 API
+ * - 支持高速统计遍历
  */
 export async function onRequest({ request, env }) {
-  const authHeader = request.headers.get("X-Auth-Token");
-  // 环境变量 DASHBOARD_PWD 仍在 env 中
-  if (authHeader !== env.DASHBOARD_PWD) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-  }
+  const allowedOrigin = env.ALLOWED_ORIGIN || "";
+  const corsHeaders = {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, X-Auth-Token",
+  };
 
-  // 使用全局 BLOG_DB
-  let db;
-  try {
-    /* global BLOG_DB */
-    db = BLOG_DB;
-  } catch (e) {
-    return new Response(JSON.stringify({ error: "Global KV 'BLOG_DB' not found" }), { status: 500 });
-  }
+  if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const url = new URL(request.url);
-  const action = url.searchParams.get("action");
-  
   try {
+    const authHeader = request.headers.get("X-Auth-Token");
+    if (!env.DASHBOARD_PWD || authHeader !== env.DASHBOARD_PWD) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { 
+        status: 401, headers: { "Content-Type": "application/json", ...corsHeaders } 
+      });
+    }
+
+    // 兼容不同的 DB 绑定方式
+    let db;
+    try { db = BLOG_DB; } catch (e) { db = env.BLOG_DB; } // @ts-ignore
+    if (!db) throw new Error("KV Binding Failed");
+
+    const url = new URL(request.url);
+    const action = url.searchParams.get("action");
+    
+    // ============================
+    // 动作: LIST (获取列表)
+    // ============================
     if (action === "list") {
-      const cursor = url.searchParams.get("cursor") || undefined;
-      const limit = 20;
+      const cursor = url.searchParams.get("cursor");
+      const prefix = url.searchParams.get("prefix");
+      const onlyKeys = url.searchParams.get("onlyKeys") === "true"; // [新增] 只返回Key模式
       
-      // 获取列表
-      const result = await db.list({ limit, cursor });
-      const keys = result.keys || [];
+      // 如果是只统计Key，允许最大 limit 256，否则限制为 30 以免读取Value超时
+      const maxLimit = onlyKeys ? 256 : 30;
+      const userLimit = parseInt(url.searchParams.get("limit"));
+      const limit = (userLimit && userLimit > 0 && userLimit <= 256) ? userLimit : 20;
       
-      // 获取值并进行解码
-      const dataWithValues = await Promise.all(keys.map(async (k) => {
-        const val = await db.get(k.key);
-        
-        // === 还原 URL ===
-        let originalUrl = k.key;
-        try {
-            originalUrl = decodePageKey(k.key);
-        } catch(e) {
-            // 解码失败则保留原 Key
-        }
+      // 强制安全限制
+      const safeLimit = Math.min(limit, maxLimit);
 
-        return { 
-            key: k.key,          // 原始 Key (用于删除/更新操作)
-            url: originalUrl,    // 解码后的 URL (用于展示)
-            value: val 
-        };
+      const listOptions = { limit: safeLimit };
+      if (cursor && cursor !== "null") listOptions.cursor = cursor;
+      if (prefix) listOptions.prefix = prefix;
+
+      // 调用 KV list
+      const listResult = await db.list(listOptions);
+      
+      // [新增] 快速返回路径：如果只需要 Keys (用于统计总数)，直接返回，不查询 Value
+      if (onlyKeys) {
+        return new Response(JSON.stringify({
+          data: listResult.keys || [], // 仅返回 Key 数组
+          cursor: listResult.cursor,
+          complete: listResult.complete
+        }), {
+          headers: { "Content-Type": "application/json", ...corsHeaders } 
+        });
+      }
+
+      // 常规路径：查询 Value (用于列表显示)
+      const keys = listResult.keys || [];
+      const dataWithValues = await Promise.all(keys.map(async (k) => {
+        try {
+          const keyName = k.key || k.name;
+          const val = await db.get(keyName);
+          return { key: keyName, value: val };
+        } catch (e) {
+          return { key: k.key || "unknown", value: null };
+        }
       }));
 
       return new Response(JSON.stringify({
         data: dataWithValues,
-        cursor: result.cursor,
-        complete: result.complete
-      }));
+        cursor: listResult.cursor,
+        complete: listResult.complete
+      }), {
+        headers: { "Content-Type": "application/json", ...corsHeaders } 
+      });
     }
-    
-    // delete 和 update 保持原样，操作的是 raw key
-    if (action === "delete" && request.method === "POST") {
-        const body = await request.json();
-        await db.delete(body.key);
-        return new Response(JSON.stringify({ success: true }));
-    }
-    
+
+    // ... update 和 delete 代码保持不变 ...
     if (action === "update" && request.method === "POST") {
         const body = await request.json();
         await db.put(body.key, String(body.value));
-        return new Response(JSON.stringify({ success: true }));
+        return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+    }
+    if (action === "delete" && request.method === "POST") {
+        const body = await request.json();
+        await db.delete(body.key);
+        return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
-    return new Response("Invalid action", { status: 400 });
+    return new Response(JSON.stringify({ error: "Invalid Action" }), { status: 400, headers: corsHeaders });
 
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+    return new Response(JSON.stringify({ error: "Server Error" }), { status: 500, headers: corsHeaders });
   }
-}
-
-/**
- * 解码函数：将 KV Key 还原为可读 URL
- * 输入: _college_study_STEM_B64:5Lyg5oSf5Zmo
- * 输出: /college-study/STEM/传感器
- */
-function decodePageKey(key) {
-    if (key === "site_total_pv") return "全站总访问量";
-    
-    // 去掉开头的 _
-    if (key.startsWith('_')) key = key.substring(1);
-    
-    const segments = key.split('_');
-    
-    const decodedSegments = segments.map(seg => {
-        // 检查是否是 Base64 标记段
-        if (seg.startsWith('B64:')) {
-            let b64 = seg.substring(4); // 去掉 B64:
-            
-            // 还原 Base64 特殊字符
-            // :A -> +, :B -> /
-            b64 = b64.replace(/:A/g, '+').replace(/:B/g, '/');
-            
-            // 补全 padding (=)
-            while (b64.length % 4 !== 0) {
-                b64 += '=';
-            }
-            
-            try {
-                // Base64 -> UTF-8 String
-                const binString = atob(b64);
-                const bytes = Uint8Array.from(binString, c => c.charCodeAt(0));
-                return new TextDecoder().decode(bytes);
-            } catch (e) {
-                return seg; // 解码失败返回原串
-            }
-        }
-        
-        // 普通英文段，如果有需要可以把 _ 还原回 - (视你的需求而定，这里不做不可逆的假设)
-        return seg;
-    });
-    
-    return '/' + decodedSegments.join('/');
 }

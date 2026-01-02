@@ -1,118 +1,136 @@
 /**
  * api/visit.js
- * 处理博客前端的访问统计请求
+ * 博客访问统计 - 生产环境版 (同步写入模式)
+ * 
+ * 功能：
+ * 1. 接收页面 URL 参数
+ * 2. 对 URL 进行安全编码作为 KV Key
+ * 3. 读取并累加 PV (Page View)
  */
-export async function onRequest({ request, env }) {
-  // 1. 跨域配置
-  const allowOrigin = env.ALLOWED_ORIGIN || "*";
+
+export async function onRequest(context) {
+  // 1. 安全检查
+  if (!context) {
+    return new Response("Error: Context is missing", { status: 500 });
+  }
+
+  const { request, env } = context;
+
+  // === 2. 跨域 (CORS) 配置 ===
+  const allowedOrigin = env.ALLOWED_ORIGIN || "";
+  
   const corsHeaders = {
-    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Origin": allowedOrigin,
     "Access-Control-Allow-Methods": "GET, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   };
 
+  // 处理预检请求 (Browser Preflight)
   if (request.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // 2. 获取全局 KV 绑定
-  // EdgeOne 允许直接访问绑定的全局变量，无需从 env 获取
-  let db;
   try {
-    /* global BLOG_DB */ // 声明全局变量以通过语法检查
-    db = BLOG_DB;
-  } catch (e) {
-    return new Response(JSON.stringify({ error: "Global KV 'BLOG_DB' not found" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json", ...corsHeaders }
-    });
-  }
+    // === 3. 获取 KV 数据库 ===
+    // 优先尝试全局绑定 BLOG_DB，失败则尝试 env.BLOG_DB
+    let db;
+    try {
+      // @ts-ignore
+      db = BLOG_DB; 
+    } catch (e) {
+      db = env.BLOG_DB;
+    }
 
-  const urlObj = new URL(request.url);
-  const targetPath = urlObj.searchParams.get("url");
+    if (!db) {
+      console.error("Configuration Error: KV 'BLOG_DB' not found.");
+      return new Response(JSON.stringify({ error: "Server Configuration Error" }), { 
+        status: 500, headers: corsHeaders 
+      });
+    }
 
-  if (!targetPath) {
-    return new Response(JSON.stringify({ error: "Missing url param" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json", ...corsHeaders }
-    });
-  }
+    // === 4. 参数解析与校验 ===
+    const urlObj = new URL(request.url);
+    const targetPath = urlObj.searchParams.get("url");
 
-  try {
-    // === 关键：使用定制的编码函数 ===
+    if (!targetPath) {
+      return new Response(JSON.stringify({ error: "Missing 'url' parameter" }), { 
+        status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } 
+      });
+    }
+
+    // === 5. 核心业务逻辑 ===
+    // 生成 Key
     const pageKey = encodePageKey(targetPath);
     const siteKey = "site_total_pv";
 
+    // 读取当前数值
     const [sitePvStr, pagePvStr] = await Promise.all([
       db.get(siteKey),
       db.get(pageKey)
     ]);
 
+    // 计算新数值
     const newSitePv = (Number(sitePvStr) || 0) + 1;
     const newPagePv = (Number(pagePvStr) || 0) + 1;
 
-    // 写入数据
+    // === 6. 同步写入 (Await 模式) ===
+    // 因为环境不支持 waitUntil，必须等待写入完成后再返回
+    // 如果写入失败，会抛出异常进入 catch 块，返回 500，保证数据一致性
     await Promise.all([
       db.put(siteKey, String(newSitePv)),
       db.put(pageKey, String(newPagePv))
     ]);
 
+    // === 7. 返回响应 ===
     return new Response(JSON.stringify({ total: newSitePv, page: newPagePv }), {
       headers: { "Content-Type": "application/json", ...corsHeaders }
     });
 
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-      headers: { "Content-Type": "application/json", ...corsHeaders }
+    console.error("Runtime Error:", err);
+    return new Response(JSON.stringify({ error: "Internal Server Error" }), { 
+      status: 500, 
+      headers: { "Content-Type": "application/json", ...corsHeaders } 
     });
   }
 }
 
 /**
- * 核心编码函数
- * 目标：/college-study/STEM/传感器 -> _college_study_STEM_Base64(传感器)
- * 限制：Key 仅支持 [a-zA-Z0-9_:]
+ * 辅助函数：将 URL 路径编码为合法的 KV Key
  */
 function encodePageKey(path) {
   if (!path) return "root";
   
-  // 1. 清理后缀和尾部斜杠
   let processed = path;
+  // 清理后缀和多余斜杠
   if (processed.endsWith('.html')) processed = processed.slice(0, -5);
-  if (processed.endsWith('/')) processed = processed.slice(0, -1);
+  if (processed.length > 1 && processed.endsWith('/')) processed = processed.slice(0, -1);
   if (!processed.startsWith('/')) processed = '/' + processed;
 
-  // 2. 分割路径
   const segments = processed.split('/').filter(Boolean);
 
-  // 3. 处理每一段
   const encodedSegments = segments.map(seg => {
-    // 检查是否仅包含允许的“常规”字符 (字母、数字)
-    // 注意：连字符 '-' 也不在你的允许列表中，所以这里我们把它也视为需要处理的，或者转为下划线
-    // 如果你希望保留英文单词间的连字符为可读，建议将其转为下划线
-    if (/^[a-zA-Z0-9]+$/.test(seg)) {
-      return seg;
-    }
-    
-    // 如果包含连字符，替换为下划线保留可读性 (可选)
-    if (/^[a-zA-Z0-9\-]+$/.test(seg)) {
-      return seg.replace(/-/g, '_');
-    }
+    // 策略修改：只有纯数字字母才保持明文
+    // 包含连字符(-)的片段现在会进入下方的 Base64 编码流程，从而保证数据可逆
+    if (/^[a-zA-Z0-9]+$/.test(seg)) return seg;
 
-    // 4. 中文或其他特殊字符：Base64 编码
-    // 使用 UTF-8 转码
-    const utf8Bytes = new TextEncoder().encode(seg);
+    // === 删除或注释掉下面这行造成 Bug 的代码 ===
+    // if (/^[a-zA-Z0-9\-]+$/.test(seg)) return seg.replace(/-/g, '_'); 
+
+    // 兼容性处理：获取 TextEncoder
+    const encoder = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null;
+    
+    // 降级回退 (只保留纯数字字母，防止报错，虽然正常环境都有 TextEncoder)
+    if (!encoder) return seg.replace(/[^a-zA-Z0-9]/g, '');
+
+    const utf8Bytes = encoder.encode(seg);
     let b64 = btoa(String.fromCharCode(...utf8Bytes));
     
-    // 5. Base64 清洗：替换 Key 不支持的字符 (+ / =)
-    // 映射规则：+ -> :A, / -> :B, = -> (去掉)
+    // Base64 字符清洗 (替换 + / =)
     b64 = b64.replace(/\+/g, ':A').replace(/\//g, ':B').replace(/=/g, '');
     
-    // 添加前缀标识以便解码（可选，但推荐，防止混淆）
     return `B64:${b64}`;
   });
 
-  // 6. 用下划线连接
   return '_' + encodedSegments.join('_');
 }

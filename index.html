@@ -2,297 +2,379 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>流量监控控制台</title>
-    <!-- 引入 Google Fonts 和图标库 -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>流量监控控制台 Pro v1.0.0 正式版</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        /* --- 颜色变量系统 --- */
         :root {
             --primary: #2563eb;
             --primary-hover: #1d4ed8;
-            --danger: #dc2626;
-            --danger-hover: #b91c1c;
-            --bg: #f3f4f6;
+            --primary-light: #eff6ff;
+            --bg: #f8fafc;
             --card-bg: #ffffff;
-            --text-main: #111827;
-            --text-sub: #6b7280;
-            --border: #e5e7eb;
+            --card-border: #e2e8f0;
+            --text-main: #0f172a;
+            --text-sub: #64748b;
+            --text-muted: #94a3b8;
+            --border: #e2e8f0;
+            --input-bg: #ffffff;
+            --danger: #ef4444;
+            --danger-bg: #fff5f5;
+            --success: #10b981;
+            --shadow: 0 1px 2px rgba(0,0,0,0.05);
+            --shadow-hover: 0 8px 12px -2px rgba(0,0,0,0.05);
         }
 
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--bg);
-            color: var(--text-main);
-            margin: 0;
-            padding: 20px;
-            line-height: 1.5;
+        :root[data-theme="dark"] {
+            --primary: #3b82f6;
+            --primary-hover: #60a5fa;
+            --primary-light: rgba(59, 130, 246, 0.1);
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --card-border: #334155;
+            --text-main: #f1f5f9;
+            --text-sub: #94a3b8;
+            --text-muted: #64748b;
+            --border: #334155;
+            --input-bg: #0f172a;
+            --danger: #f87171;
+            --danger-bg: rgba(239, 68, 68, 0.1);
+            --success: #34d399;
+            --shadow: 0 1px 2px rgba(0,0,0,0.3);
+            --shadow-hover: 0 8px 12px -2px rgba(0,0,0,0.5);
         }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
+        body::-webkit-scrollbar { width: 8px; }
+        body::-webkit-scrollbar-track { background: var(--bg); }
+        body::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 4px; }
 
-        /* 登录框 */
-        .login-wrapper {
-            height: 80vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .login-box {
-            background: var(--card-bg);
-            padding: 2rem;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            width: 100%;
-            max-width: 400px;
-            text-align: center;
-        }
-
-        /* 顶部栏 */
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 24px;
-            background: var(--card-bg);
-            padding: 16px 24px;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        .header h1 { margin: 0; font-size: 1.25rem; font-weight: 600; }
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text-main); margin: 0; padding: 0; font-size: 14px; -webkit-font-smoothing: antialiased; transition: background 0.3s ease, color 0.3s ease; }
         
-        /* 工具栏 */
-        .toolbar {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 16px;
-            flex-wrap: wrap;
-        }
-        .search-input {
-            flex: 1;
-            min-width: 200px;
-            padding: 10px 16px;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        .search-input:focus { border-color: var(--primary); }
+        .app-layout { max-width: 1200px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; padding: 20px; box-sizing: border-box; }
+        .main-content { flex: 1; display: flex; flex-direction: column; }
 
-        /* 表格容器 */
-        .table-card {
-            background: var(--card-bg);
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            overflow: hidden;
+        .page-header { margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-end; }
+        .page-title h1 { margin: 0; font-size: 24px; font-weight: 700; color: var(--text-main); letter-spacing: -0.5px; }
+        .page-title span { font-size: 13px; color: var(--text-sub); font-weight: 500; margin-top: 4px; display: block; }
+
+        .theme-toggle {
+            background: var(--card-bg); border: 1px solid var(--card-border); width: 40px; height: 40px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-main);
+            box-shadow: var(--shadow); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        table { width: 100%; border-collapse: collapse; }
-        th { 
-            background: #f9fafb; 
-            text-align: left; 
-            padding: 12px 24px; 
-            font-size: 0.85rem; 
-            color: var(--text-sub); 
-            font-weight: 600;
-            border-bottom: 1px solid var(--border);
+        .theme-toggle:hover { transform: rotate(15deg) scale(1.05); box-shadow: var(--shadow-hover); border-color: var(--text-muted); }
+        .theme-toggle svg { width: 20px; height: 20px; fill: currentColor; }
+
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: var(--card-bg); padding: 24px; border-radius: 12px; border: 1px solid var(--card-border); box-shadow: var(--shadow); transition: all 0.2s; }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); border-color: var(--text-muted); }
+        .stat-label { color: var(--text-sub); font-size: 12px; font-weight: 600; text-transform: uppercase; }
+        .stat-value { font-size: 30px; font-weight: 700; margin-top: 12px; color: var(--text-main); letter-spacing: -1px; }
+        .stat-desc { font-size: 13px; color: var(--text-sub); margin-top: 8px; display: flex; align-items: center; gap: 6px; }
+
+        .toolbar { display: flex; gap: 12px; margin-bottom: 16px; background: var(--card-bg); padding: 12px; border-radius: 12px; border: 1px solid var(--card-border); box-shadow: var(--shadow); }
+        .search-input { flex: 1; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; outline: none; transition: all 0.2s; background: var(--input-bg); color: var(--text-main); }
+        .search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
+        .btn { padding: 0 16px; height: 40px; border: 1px solid var(--border); background: var(--card-bg); border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px; color: var(--text-main); transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; }
+        .btn:hover:not(:disabled) { background: var(--bg); border-color: var(--text-sub); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary { background: var(--primary); color: white; border-color: var(--primary); }
+        .btn-primary:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); }
+        .btn-danger { color: var(--danger); border-color: var(--danger); background: var(--danger-bg); }
+        .btn-danger:hover { background: rgba(239, 68, 68, 0.2); }
+
+        .table-container { background: var(--card-bg); border-radius: 12px; border: 1px solid var(--card-border); overflow: hidden; box-shadow: var(--shadow); flex: 1; display: flex; flex-direction: column; }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        th { background: var(--bg); text-align: left; padding: 14px 20px; font-size: 12px; color: var(--text-sub); font-weight: 600; border-bottom: 1px solid var(--border); transition: background 0.3s; }
+        td { padding: 14px 20px; border-bottom: 1px solid var(--border); vertical-align: middle; color: var(--text-main); transition: background 0.2s; }
+        tr:hover td { background: var(--bg); }
+        tr:last-child td { border-bottom: none; }
+        .td-no-border { border-bottom: none !important; }
+
+        /* 分页栏样式 */
+        .pagination-bar { 
+            display: flex; justify-content: space-between; align-items: center; 
+            padding: 12px 20px; border-top: 1px solid var(--border); background: var(--bg);
         }
-        td { 
-            padding: 16px 24px; 
-            border-bottom: 1px solid var(--border);
+        .pagination-controls { display: flex; gap: 8px; align-items: center; }
+        .page-info { font-size: 12px; color: var(--text-sub); font-weight: 500; }
+
+        .key-badge { 
+            display: inline-flex; align-items: center; gap: 4px;
+            font-size: 10px; padding: 2px 8px; 
+            background: var(--bg); border: 1px solid var(--border); 
+            border-radius: 4px; color: var(--text-muted); 
+            cursor: pointer; font-family: monospace; margin-top: 6px;
+            transition: all 0.2s;
+            max-width: 240px;
             vertical-align: middle;
         }
-        tr:last-child td { border-bottom: none; }
-        tr:hover { background-color: #f9fafb; }
-
-        /* 内容样式 */
-        .url-text {
-            color: var(--primary);
-            font-weight: 500;
-            display: block;
-            margin-bottom: 4px;
-            word-break: break-all;
-        }
-        .key-text {
-            font-family: monospace;
-            font-size: 0.75rem;
-            color: #9ca3af;
-            background: #f3f4f6;
-            padding: 2px 6px;
-            border-radius: 4px;
-            cursor: pointer;
-            display: inline-block;
-            max-width: 300px;
+        .key-badge span {
+            white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            white-space: nowrap;
+            display: block;
+            max-width: 180px;
         }
-        .key-text:hover { color: var(--text-main); background: #e5e7eb; }
+        .key-badge:hover { border-color: var(--primary); color: var(--primary); background: var(--card-bg); }
+        .key-badge svg { width: 10px; height: 10px; fill: currentColor; }
+
+        .path-primary { font-weight: 500; color: var(--text-main); font-size: 14px; margin-bottom: 2px; line-height: 1.5; word-break: break-all; }
+        .root-badge {
+            background: var(--success); 
+            color: white; 
+            padding: 0 5px; 
+            border-radius: 3px; 
+            font-size: 11px; 
+            margin-left: 6px;
+            vertical-align: middle;
+        }
         
-        .pv-input {
-            width: 80px;
-            padding: 6px 10px;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            text-align: center;
-            font-weight: 600;
-        }
+        .th-path { width: 50%; }
+        .th-heat { width: 25%; }
+        .th-edit { width: 15%; text-align: center; }
+        .th-action { width: 10%; text-align: right; }
 
-        /* 按钮 */
-        .btn {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 500;
-            transition: all 0.2s;
-            font-size: 0.9rem;
-        }
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-primary:hover { background: var(--primary-hover); }
-        .btn-danger { background: white; color: var(--danger); border: 1px solid var(--border); }
-        .btn-danger:hover { background: #fee2e2; border-color: #fee2e2; }
-        .btn-ghost { background: transparent; color: var(--text-sub); }
-        .btn-ghost:hover { background: #f3f4f6; color: var(--text-main); }
-        .btn-sm { padding: 6px 12px; font-size: 0.85rem; }
+        .pv-container { display: flex; align-items: center; gap: 12px; }
+        .pv-bar-bg { flex: 1; height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+        .pv-bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--primary-hover)); border-radius: 4px; transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
+        .pv-number { font-weight: 700; font-size: 13px; min-width: 50px; text-align: right; color: var(--text-main); }
+        .mobile-bar-container { display: none; margin-top: 8px; align-items: center; gap: 8px; }
+        
+        .edit-input { width: 100%; max-width: 80px; padding: 6px; border: 1px solid var(--border); border-radius: 6px; text-align: center; font-size: 13px; font-weight: 500; background: var(--input-bg); color: var(--text-main); }
+        .edit-input:focus { border-color: var(--primary); outline: none; }
+        
+        .site-footer { margin-top: 30px; padding: 20px 0; border-top: 1px dashed var(--border); color: var(--text-sub); display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+        .footer-left { display: flex; align-items: center; gap: 15px; }
+        .status-dot { width: 8px; height: 8px; background: var(--success); border-radius: 50%; display: inline-block; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2); }
+        .separator { color: var(--border); }
 
-        /* 状态标记 */
-        .badge-home {
-            background: #dbeafe;
-            color: #1e40af;
-            padding: 2px 8px;
-            border-radius: 99px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            margin-right: 8px;
-        }
+        .toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 1000; pointer-events: none; }
+        .toast { background: rgba(15, 23, 42, 0.95); color: white; padding: 10px 20px; border-radius: 30px; font-size: 13px; font-weight: 500; box-shadow: 0 10px 25px rgba(0,0,0,0.2); margin-bottom: 10px; opacity: 0; transform: translateY(-20px); transition: all 0.3s; display: flex; align-items: center; gap: 8px; backdrop-filter: blur(4px); }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        
+        .login-wrapper { display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 80vh; padding: 20px; }
+        .login-box { background: var(--card-bg); padding: 40px; border-radius: 16px; border: 1px solid var(--card-border); box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); width: 100%; max-width: 380px; text-align: center; }
+        .badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-right: 6px; vertical-align: middle; }
+        .badge-core { background: var(--primary-light); color: var(--primary); border: 1px solid rgba(59, 130, 246, 0.2); }
 
-        /* 吐司提示 */
-        .toast-container {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-        }
-        .toast {
-            background: white;
-            padding: 12px 24px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            animation: slideIn 0.3s ease;
-            border-left: 4px solid var(--primary);
-        }
-        .toast.error { border-left-color: var(--danger); }
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-
-        .loading-spinner {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border: 2px solid rgba(255,255,255,0.3);
-            border-radius: 50%;
-            border-top-color: #fff;
-            animation: spin 1s ease-in-out infinite;
-            margin-right: 6px;
-        }
+        .spinner { width: 14px; height: 14px; border: 2px solid var(--primary); border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; vertical-align: middle; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        .load-more-container { text-align: center; padding: 20px; }
+        @media (max-width: 768px) {
+            .app-layout { padding: 12px; }
+            .page-title h1 { font-size: 20px; }
+            .stat-value { font-size: 26px; }
+            .toolbar { flex-direction: column; padding: 16px; gap: 12px; }
+            .toolbar button { width: 100%; }
+            .th-heat, .col-heatmap, .separator { display: none; }
+            .th-path { width: 62%; }
+            .th-edit { width: 20%; }
+            .th-action { width: 18%; }
+            .mobile-bar-container { display: flex; }
+            th, td { padding: 12px 10px; }
+            .site-footer { flex-direction: column; gap: 12px; text-align: center; border-top: none; padding-top: 10px; }
+            .footer-left { flex-direction: column; gap: 6px; }
+            .status-line { background: var(--bg); padding: 6px 16px; border-radius: 20px; border: 1px solid var(--border); display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 12px; }
+            .pagination-bar { flex-direction: column; gap: 12px; align-items: stretch; }
+            .pagination-controls { justify-content: space-between; }
+            
+            /* 优化移动端 key 显示 */
+            .key-badge {
+                max-width: 100%;
+                margin-top: 8px;
+            }
+            .key-badge span {
+                max-width: 100%;
+                font-size: 9px;
+            }
+        }
     </style>
 </head>
 <body>
 
-<div id="app" class="container">
-    
-    <!-- 吐司提示容器 -->
+<div id="app" class="app-layout">
     <div class="toast-container">
-        <div v-for="t in toasts" :key="t.id" class="toast" :class="{error: t.type === 'error'}">
-            {{ t.msg }}
+        <div class="toast" :class="{ show: toast.visible }">
+            <span class="toast-icon">{{ toast.icon }}</span> {{ toast.msg }}
         </div>
     </div>
 
-    <!-- 登录视图 -->
     <div v-if="!isLoggedIn" class="login-wrapper">
         <div class="login-box">
-            <h2 style="margin-bottom: 24px;">流量控制台</h2>
-            <input type="password" v-model="password" class="search-input" placeholder="输入访问密钥" style="width: 100%; box-sizing: border-box; margin-bottom: 16px;" @keyup.enter="login">
-            <button class="btn btn-primary" style="width: 100%" @click="login">进入系统</button>
+            <div style="font-size: 40px; margin-bottom: 20px;">🛡️</div>
+            <h2 style="margin: 0 0 10px 0; color: var(--text-main);">Console Login</h2>
+            <p style="margin: 0 0 30px 0; color: var(--text-sub); font-size: 13px; line-height: 1.5;">请输入管理员密钥以访问<br>全站流量监控数据</p>
+            <input type="password" v-model="password" class="search-input" style="width: 100%; box-sizing: border-box; margin-bottom: 20px; text-align:center; letter-spacing: 2px;" placeholder="●●●●●●●●" @keyup.enter="login">
+            <button class="btn btn-primary" style="width: 100%; height: 44px; font-size: 14px;" @click="login">验证身份</button>
         </div>
     </div>
 
-    <!-- 主界面 -->
-    <div v-else>
-        <div class="header">
-            <div style="display:flex; align-items:center;">
-                <h1>访问统计管理</h1>
-                <span style="margin-left:12px; font-size:0.85rem; color:#666; background:#eee; padding:2px 8px; border-radius:4px">{{ filteredItems.length }} 条记录</span>
+    <div v-else class="main-content">
+        <header class="page-header">
+            <div class="page-title">
+                <h1>全站访问量数据监控屏</h1>
+                <span>Total Site Traffic Analytics Dashboard</span>
             </div>
-            <button class="btn btn-ghost" @click="logout">退出登录</button>
+            <button class="theme-toggle" @click="toggleTheme" :title="theme === 'dark' ? '切换到亮色模式' : '切换到暗色模式'">
+                <svg v-if="theme === 'dark'" viewBox="0 0 24 24"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58a.996.996 0 00-1.41 0 .996.996 0 000 1.41l1.29 1.29c.39.39 1.02.39 1.41 0 .39-.39.39-1.02 0-1.41L5.99 4.58zm12.37 12.37a.996.996 0 00-1.41 0 .996.996 0 000 1.41l1.29 1.29c.39.39 1.02.39 1.41 0 .39-.39.39-1.02 0-1.41l-1.29-1.29zm1.41-13.78c-.39-.39-1.02-.39-1.41 0a.996.996 0 000 1.41l1.29 1.29c.39.39 1.02.39 1.41 0 .39-.39.39-1.02 0-1.41l-1.29-1.29zM7.28 17.17c-.39-.39-1.02-.39-1.41 0a.996.996 0 000 1.41l1.29 1.29c.39.39 1.02.39 1.41 0 .39-.39.39-1.02 0-1.41l-1.29-1.29z"></path></svg>
+                <svg v-else viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-3.03 0-5.5-2.47-5.5-5.5 0-1.82.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"></path></svg>
+            </button>
+        </header>
+
+        <div class="dashboard-grid">
+            <div class="stat-card">
+                <div class="stat-label">全站总 PV (Site Total)</div>
+                <!-- 修复: 显示独立获取的 site_total_pv -->
+                <div class="stat-value">{{ globalTotalPV.toLocaleString() }}</div>
+                <div class="stat-desc">
+                    <span style="color: var(--success);">●</span> 实时累计访问
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">收录 URL 总数 (Total Keys)</div>
+                <!-- 修复: 初始为 --，后台扫描完成后显示数字 -->
+                <div class="stat-value" style="color: var(--primary);">
+                    {{ totalUrlCount !== null ? totalUrlCount.toLocaleString() : '--' }}
+                </div>
+                <div class="stat-desc">
+                    <!-- 显示扫描动画状态 -->
+                    <span v-if="isScanning" style="display:flex; align-items:center; gap:6px; color: var(--primary);">
+                        <div class="spinner" style="border-width:2px; width:10px; height:10px;"></div>
+                        全库统计中...
+                    </span>
+                    <span v-else>
+                        有效页面路径数
+                    </span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Top 1 热门内容（第 {{ currentPageIndex + 1 }} 页）</div>
+                <div class="stat-value" style="font-size: 16px; margin-top: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" :title="topPage ? topPage.decodedUrl : ''">
+                    <template v-if="topPage">
+                        {{ topPage.decodedUrl === '/' ? '根域名落地页' : topPage.decodedUrl }}
+                        <span v-if="topPage.decodedUrl === '/'" class="root-badge">ROOT</span>
+                    </template>
+                    <template v-else>--</template>
+                </div>
+                <div class="stat-desc" v-if="topPage">贡献了全站 {{ calculateShare(topPage.value).toFixed(1) }}% 的流量</div>
+            </div>
         </div>
 
         <div class="toolbar">
-            <input type="text" v-model="searchQuery" class="search-input" placeholder="🔍 搜索路径或 Key...">
-            <button class="btn btn-primary" @click="refreshData">刷新列表</button>
+            <!-- 搜索框 -->
+            <div style="flex:1; display:flex; gap:8px; align-items:center;">
+                <input type="text" v-model="searchQuery" class="search-input" placeholder="输入路径或关键词，回车搜索全站..." @keyup.enter="triggerSearch">
+                <button class="btn btn-primary" @click="triggerSearch" :disabled="loading">
+                    🔍 搜索 / 扫描
+                </button>
+            </div>
+            <button class="btn" @click="resetView" :disabled="loading">
+                <span v-if="loading && !searchMode">
+                    <div class="spinner" style="width:10px; height:10px;"></div> 加载中...
+                </span>
+                <span v-else>⟳ 重置 / 刷新</span>
+            </button>
+            <button class="btn btn-danger" @click="logout">退出</button>
         </div>
 
-        <div class="table-card">
+        <div class="table-container">
+            <!-- 搜索模式下的状态提示条 -->
+            <div v-if="searchMode" style="padding: 10px 20px; background: var(--primary-light); color: var(--primary); font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: space-between;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="spinner" v-if="!searchComplete"></div>
+                    <span>{{ searchComplete ? '全站搜索完成' : '正在扫描全站数据...' }} (已找到 {{ items.length }} 条匹配)</span>
+                </div>
+                <span v-if="!searchComplete" style="cursor: pointer; opacity: 0.8; text-decoration: underline;" @click="stopSearch">停止扫描</span>
+            </div>
+
             <table>
                 <thead>
                     <tr>
-                        <th style="width: 45%">页面路径</th>
-                        <th style="width: 25%">KV 键名 (点击复制)</th>
-                        <th style="width: 15%; text-align: center;">访问量 (PV)</th>
-                        <th style="width: 15%; text-align: right;">操作</th>
+                        <th class="th-path">资源路径 / Resource Path</th>
+                        <th class="th-heat col-heatmap">热度分布</th>
+                        <th class="th-edit">修正值</th>
+                        <th class="th-action">管理</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-if="loading && items.length === 0">
-                        <td colspan="4" style="text-align:center; padding: 40px; color: #999;">
-                            加载数据中...
-                        </td>
-                    </tr>
-                    
-                    <tr v-for="item in filteredItems" :key="item.key">
+                    <tr v-for="item in items" :key="item.key">
                         <td>
-                            <div style="display:flex; align-items:center;">
-                                <span v-if="item.key === 'site_total_pv'" class="badge-home">核心</span>
-                                <span class="url-text">{{ item.decodedUrl }}</span>
+                            <div class="path-primary">
+                                <span v-if="item.key === 'site_total_pv'" class="badge badge-core">ROOT</span>
+                                {{ item.decodedUrl === '/' ? '根域名落地页' : item.decodedUrl }}
+                                <span v-if="item.decodedUrl === '/'" class="root-badge">ROOT</span>
+                            </div>
+                            <div class="key-badge" @click="copy(item.key)" :title="'点击复制完整 Key:\n' + item.key">
+                                <span>{{ truncateKey(item.key) }}</span>
+                            </div>
+                            <div class="mobile-bar-container">
+                                <span style="font-size:11px; font-weight:600; color:var(--primary); min-width:35px;">{{ formatNumber(item.value) }}</span>
+                                <div class="pv-bar-bg" style="height: 4px;">
+                                    <div class="pv-bar-fill" :style="{ width: calculateRelative(item.value) + '%' }"></div>
+                                </div>
                             </div>
                         </td>
-                        <td>
-                            <span class="key-text" @click="copyToClipboard(item.key)" title="点击复制">{{ item.key }}</span>
+                        <td class="col-heatmap">
+                            <div class="pv-container">
+                                <div class="pv-number">{{ Number(item.value).toLocaleString() }}</div>
+                                <div class="pv-bar-bg">
+                                    <div class="pv-bar-fill" :style="{ width: calculateRelative(item.value) + '%' }"></div>
+                                </div>
+                            </div>
                         </td>
                         <td style="text-align: center;">
-                            <input type="number" v-model="item.newValue" class="pv-input" @focus="$event.target.select()" />
+                            <input type="number" v-model="item.newValue" class="edit-input" @focus="$event.target.select()">
                         </td>
                         <td style="text-align: right;">
-                            <button v-if="item.newValue != item.value" class="btn btn-primary btn-sm" @click="updateItem(item)" :disabled="item.updating">
-                                <span v-if="item.updating" class="loading-spinner"></span>
-                                保存
-                            </button>
-                            <button v-else class="btn btn-danger btn-sm" @click="deleteItem(item.key)" :disabled="item.deleting">
-                                删除
-                            </button>
+                            <div v-if="item.newValue != item.value">
+                                <button class="btn btn-primary" style="padding: 0 10px; font-size: 12px; height: 32px;" @click="updateItem(item)">保存</button>
+                            </div>
+                            <div v-else>
+                                <button class="btn btn-danger" style="padding: 0 10px; font-size: 12px; height: 32px; background:transparent; border:none;" @click="deleteItem(item)">删除</button>
+                            </div>
                         </td>
                     </tr>
-
-                    <tr v-if="filteredItems.length === 0 && !loading && items.length > 0">
-                        <td colspan="4" style="text-align:center; color:#999;">没有匹配的记录</td>
+                    <tr v-if="items.length === 0 && !loading">
+                        <td colspan="4" class="td-no-border" style="text-align: center; padding: 60px 20px;">
+                            <div style="font-size: 40px; margin-bottom: 10px; opacity: 0.5;">{{ fetchError ? '⚠️' : '📭' }}</div>
+                            <div style="font-weight: 600; color: var(--text-main);">{{ fetchError ? '数据加载异常' : '暂无数据' }}</div>
+                            <div style="font-size: 13px; color: var(--text-sub); margin-top: 6px;">
+                                {{ fetchError || (searchMode ? '未在全站找到包含该关键词的路径。' : '您的站点似乎还没有产生访问流量。') }}
+                            </div>
+                        </td>
                     </tr>
                 </tbody>
             </table>
             
-            <div class="load-more-container">
-                <button v-if="!complete" class="btn btn-ghost" @click="loadMore" :disabled="loading">
-                    {{ loading ? '加载中...' : '加载更多数据' }}
-                </button>
-                <span v-else style="font-size: 0.85rem; color: #9ca3af;">已加载全部数据</span>
+            <!-- 分页栏 (仅在非搜索模式下显示) -->
+            <div class="pagination-bar" v-if="isLoggedIn && !searchMode">
+                <div class="page-info">
+                    当前第 {{ currentPageIndex + 1 }} 页
+                </div>
+                <div class="pagination-controls">
+                    <button class="btn" style="height: 36px;" @click="prevPage" :disabled="loading || currentPageIndex === 0">
+                        &larr; 上一页
+                    </button>
+                    <button class="btn" style="height: 36px;" @click="nextPage" :disabled="loading || complete">
+                        下一页 &rarr;
+                    </button>
+                </div>
             </div>
         </div>
+
+        <footer class="site-footer">
+            <div class="footer-left">
+                <div class="status-line">
+                    <span class="status-dot"></span> 
+                    <span>系统运行正常</span>
+                </div>
+                <span class="separator">|</span>
+                <div style="opacity: 0.8; font-size: 12px;">数据更新于 {{ lastUpdateTime }}</div>
+            </div>
+            <div style="color: var(--text-muted); font-size: 12px; font-family: monospace;">v1.0.0 正式版</div>
+        </footer>
     </div>
 </div>
 
@@ -302,219 +384,365 @@
 
     createApp({
         setup() {
-            // 状态变量
+            // 基础状态
             const isLoggedIn = ref(false);
             const password = ref('');
-            const items = ref([]); // 存储所有加载的数据
-            const cursor = ref(null);
-            const complete = ref(false);
+            const items = ref([]); 
+            
+            // 分页相关
+            const pageCursors = ref([null]); 
+            const currentPageIndex = ref(0); 
+            const complete = ref(false); 
+            
+            // 统计与搜索状态
             const loading = ref(false);
             const searchQuery = ref('');
-            const toasts = ref([]);
+            const searchMode = ref(false); // 是否处于搜索模式
+            const searchComplete = ref(false); // 搜索是否结束
+            const abortController = ref(null); // 用于中断请求
+            
+            // 全站统计数据
+            const globalTotalPV = ref(0); 
+            const totalUrlCount = ref(null); // null表示未加载
+            const isScanning = ref(false); // 是否正在后台统计
 
-            // 生命周期
+            const fetchError = ref(''); 
+            const lastUpdateTime = ref('-');
+            const toast = ref({ visible: false, msg: '', icon: '' });
+            const theme = ref('light');
+
             onMounted(() => {
                 const stored = localStorage.getItem('dash_pwd');
-                if (stored) {
-                    password.value = stored;
-                    login();
-                }
+                if (stored) { password.value = stored; login(); }
+                updateTime();
+                initTheme();
             });
 
-            // === 核心逻辑：解码 Key ===
-            // 对应后端逻辑：_分隔，B64:前缀，:A/:B替换
-            const decodeKey = (key) => {
-                if (key === 'site_total_pv') return '🏠 全站总访问量';
-                
-                // 1. 去掉开头的 _
-                let cleanKey = key.startsWith('_') ? key.substring(1) : key;
-                
-                // 2. 分割
-                const segments = cleanKey.split('_');
-
-                const decodedSegments = segments.map(seg => {
-                    if (seg.startsWith('B64:')) {
-                        let b64 = seg.substring(4); // 去掉 B64:
-                        // 还原特殊字符
-                        b64 = b64.replace(/:A/g, '+').replace(/:B/g, '/');
-                        // 补全 padding
-                        while (b64.length % 4 !== 0) b64 += '=';
-                        
-                        try {
-                            // Base64 -> UTF-8
-                            const binString = atob(b64);
-                            const bytes = Uint8Array.from(binString, c => c.charCodeAt(0));
-                            return new TextDecoder().decode(bytes);
-                        } catch (e) {
-                            return seg; 
-                        }
+            // --- 核心功能 1: 获取全站总 PV ---
+            // 依赖后端 API: 支持 prefix 参数
+            const fetchGlobalTotal = async () => {
+                try {
+                    const res = await fetch(`/api/admin?action=list&prefix=site_total_pv`, { 
+                        headers: { 'X-Auth-Token': password.value } 
+                    });
+                    const data = await res.json();
+                    if (data.data && data.data.length > 0) {
+                        const totalItem = data.data.find(i => i.key === 'site_total_pv');
+                        if (totalItem) globalTotalPV.value = Number(totalItem.value);
                     }
-                    // 普通英文段保留
-                    return seg;
-                });
-
-                return '/' + decodedSegments.join('/');
+                } catch (e) { console.warn("获取全局总数失败:", e); }
             };
 
-            // 登录
+            // --- 核心功能 2: 后台静默扫描全库统计 URL 总数 ---
+            // 依赖后端 API: 支持 onlyKeys=true 和 limit 参数
+            const scanTotalCounts = async () => {
+                if (isScanning.value) return;
+                isScanning.value = true;
+                totalUrlCount.value = 0;
+                
+                let cursor = null;
+                let isDone = false;
+                let count = 0;
+
+                try {
+                    while (!isDone) {
+                        // 如果用户退出了，停止循环
+                        if (!isLoggedIn.value) break;
+
+                        // 使用高速模式: onlyKeys=true, limit=256
+                        let url = `/api/admin?action=list&onlyKeys=true&limit=256`;
+                        if (cursor) url += `&cursor=${cursor}`;
+
+                        const res = await fetch(url, { headers: { 'X-Auth-Token': password.value } });
+                        if (!res.ok) break;
+                        
+                        const data = await res.json();
+                        const pageKeys = data.data || [];
+                        
+                        // 过滤掉系统保留Key
+                        const validKeys = pageKeys.filter(k => (k.key || k.name || k) !== 'site_total_pv');
+                        count += validKeys.length;
+                        totalUrlCount.value = count;
+
+                        if (data.complete) {
+                            isDone = true;
+                        } else {
+                            cursor = data.cursor;
+                        }
+                        // 稍微休眠，防止触发子请求速率限制
+                        await new Promise(r => setTimeout(r, 50));
+                    }
+                } catch (e) {
+                    console.error("后台统计中断", e);
+                } finally {
+                    isScanning.value = false;
+                }
+            };
+
+            // --- 核心功能 3: 常规列表加载 ---
+            const fetchData = async (targetCursor) => {
+                if (loading.value) return;
+                loading.value = true;
+                fetchError.value = ''; 
+
+                try {
+                    let url = `/api/admin?action=list`; // 默认 limit 由后端决定(20-30)
+                    if (targetCursor) url += `&cursor=${targetCursor}`;
+                    
+                    const res = await fetch(url, { headers: { 'X-Auth-Token': password.value } });
+                    if (res.status === 401) { logout(); showToast("密钥失效", 'error'); return; }
+                    
+                    const data = await res.json();
+                    items.value = processItems(data.data);
+                    complete.value = data.complete;
+                    
+                    // 记录下一页游标
+                    if (!data.complete && data.cursor && currentPageIndex.value === pageCursors.value.length - 1) {
+                        pageCursors.value.push(data.cursor);
+                    }
+                    updateTime();
+                } catch (e) {
+                    fetchError.value = "无法连接到服务器";
+                } finally { loading.value = false; }
+            };
+
+            // --- 核心功能 4: 全站搜索模式 ---
+            const triggerSearch = () => {
+                if (!searchQuery.value.trim()) {
+                    resetView();
+                    return;
+                }
+                searchMode.value = true;
+                searchComplete.value = false;
+                items.value = []; 
+                loading.value = true;
+
+                if (abortController.value) abortController.value.abort();
+                abortController.value = new AbortController();
+
+                performGlobalSearch(null);
+            };
+
+            const performGlobalSearch = async (cursor) => {
+                try {
+                    // 搜索时需要 Values，所以不使用 onlyKeys
+                    // 建议后端默认 limit 为 20-30，避免一次拉取太多导致超时
+                    let url = `/api/admin?action=list`;
+                    if (cursor) url += `&cursor=${cursor}`;
+                    
+                    const res = await fetch(url, { 
+                        headers: { 'X-Auth-Token': password.value },
+                        signal: abortController.value.signal 
+                    });
+                    
+                    const data = await res.json();
+                    const pageData = data.data || [];
+                    
+                    // 前端筛选匹配项
+                    const query = searchQuery.value.toLowerCase();
+                    const matches = processItems(pageData).filter(i => 
+                        i.key !== 'site_total_pv' && 
+                        (i.key.toLowerCase().includes(query) || i.decodedUrl.toLowerCase().includes(query))
+                    );
+                    
+                    items.value = [...items.value, ...matches];
+
+                    if (!data.complete && data.cursor) {
+                        requestAnimationFrame(() => performGlobalSearch(data.cursor));
+                    } else {
+                        loading.value = false;
+                        searchComplete.value = true;
+                        showToast(`搜索结束，找到 ${items.value.length} 条`, 'success');
+                    }
+                } catch (e) {
+                    if (e.name !== 'AbortError') {
+                        console.error(e);
+                        loading.value = false;
+                    }
+                }
+            };
+
+            const stopSearch = () => {
+                if (abortController.value) abortController.value.abort();
+                loading.value = false;
+                searchComplete.value = true;
+                showToast("已停止扫描");
+            };
+
+            // --- 辅助逻辑 ---
+            const resetView = () => {
+                searchMode.value = false;
+                searchQuery.value = '';
+                items.value = [];
+                pageCursors.value = [null];
+                currentPageIndex.value = 0;
+                complete.value = false;
+                if (abortController.value) abortController.value.abort();
+                fetchData(null);
+                fetchGlobalTotal();
+                // 如果 totalUrlCount 还没统计完，可以重新触发
+                if (totalUrlCount.value === null) scanTotalCounts();
+            };
+
+            const processItems = (rawData) => {
+                return (rawData || []).map(i => ({ 
+                    ...i, 
+                    newValue: i.value, 
+                    decodedUrl: decodeKey(i.key) 
+                }));
+            };
+
+            const nextPage = () => {
+                if (complete.value) return;
+                currentPageIndex.value++;
+                fetchData(pageCursors.value[currentPageIndex.value]);
+            };
+            const prevPage = () => {
+                if (currentPageIndex.value === 0) return;
+                currentPageIndex.value--;
+                fetchData(pageCursors.value[currentPageIndex.value]);
+            };
+
             const login = () => {
                 if (!password.value) return;
                 isLoggedIn.value = true;
                 localStorage.setItem('dash_pwd', password.value);
-                // 首次加载清空数据
+                
+                // 并行启动所有任务
                 items.value = [];
-                cursor.value = null;
-                fetchData(true);
+                pageCursors.value = [null];
+                currentPageIndex.value = 0;
+                
+                fetchData(null);       // 加载列表
+                fetchGlobalTotal();    // 加载总PV
+                scanTotalCounts();     // 启动后台统计URL总数
             };
 
             const logout = () => {
                 isLoggedIn.value = false;
                 password.value = '';
                 localStorage.removeItem('dash_pwd');
-                items.value = [];
+                // 停止任何正在进行的扫描
+                isScanning.value = false;
+                if (abortController.value) abortController.value.abort();
             };
 
-            const showToast = (msg, type = 'success') => {
-                const id = Date.now();
-                toasts.value.push({ id, msg, type });
-                setTimeout(() => {
-                    toasts.value = toasts.value.filter(t => t.id !== id);
-                }, 3000);
-            };
-
-            const copyToClipboard = (text) => {
-                navigator.clipboard.writeText(text).then(() => {
-                    showToast('Key 已复制');
-                });
-            };
-
-            // 获取数据
-            const fetchData = async (reset = false) => {
-                if (loading.value) return;
-                loading.value = true;
-                
+            const deleteItem = async (item) => {
+                if (!confirm(`确定删除 "${item.decodedUrl}" 吗?`)) return;
                 try {
-                    let url = `/api/admin?action=list`;
-                    // 如果后端支持，这里应该把 filter 也传过去，但 currently 仅支持 cursor
-                    if (!reset && cursor.value) url += `&cursor=${cursor.value}`;
-                    
-                    const res = await fetch(url, {
-                        headers: { 'X-Auth-Token': password.value }
+                    await fetch('/api/admin?action=delete', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-Auth-Token': password.value },
+                        body: JSON.stringify({ key: item.key })
                     });
-
-                    if (res.status === 401) {
-                        showToast("密码错误，请重新登录", "error");
-                        logout();
-                        return;
+                    items.value = items.value.filter(i => i.key !== item.key);
+                    showToast("删除成功");
+                    // 同步扣减本地总数
+                    if (item.key !== 'site_total_pv') {
+                        const diff = Number(item.value) || 0;
+                        globalTotalPV.value = Math.max(0, globalTotalPV.value - diff);
+                        // 更新后端
+                        fetch('/api/admin?action=update', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-Auth-Token': password.value },
+                            body: JSON.stringify({ key: 'site_total_pv', value: String(globalTotalPV.value) })
+                        });
+                        // 更新计数
+                        if (totalUrlCount.value > 0) totalUrlCount.value--;
                     }
-
-                    const data = await res.json();
-                    
-                    // 处理数据：添加解码后的 URL 和编辑状态
-                    const newItems = (data.data || []).map(i => ({
-                        ...i, 
-                        newValue: i.value, 
-                        decodedUrl: decodeKey(i.key), // 前端解码
-                        updating: false,
-                        deleting: false
-                    }));
-                    
-                    if (reset) {
-                        items.value = newItems;
-                    } else {
-                        // 简单的去重合并
-                        const existingKeys = new Set(items.value.map(i => i.key));
-                        const uniqueNewItems = newItems.filter(i => !existingKeys.has(i.key));
-                        items.value = [...items.value, ...uniqueNewItems];
-                    }
-                    
-                    cursor.value = data.cursor;
-                    complete.value = data.complete;
-
-                } catch (e) {
-                    console.error(e);
-                    showToast("数据加载失败: " + e.message, "error");
-                } finally {
-                    loading.value = false;
-                }
+                } catch(e) { showToast("操作失败", 'error'); }
             };
 
-            const refreshData = () => {
-                cursor.value = null;
-                fetchData(true);
-            };
-
-            const loadMore = () => fetchData(false);
-
-            // 更新 PV
             const updateItem = async (item) => {
-                item.updating = true;
                 try {
                     const res = await fetch('/api/admin?action=update', {
                         method: 'POST',
-                        headers: { 
-                            'Content-Type': 'application/json',
-                            'X-Auth-Token': password.value 
-                        },
+                        headers: { 'Content-Type': 'application/json', 'X-Auth-Token': password.value },
                         body: JSON.stringify({ key: item.key, value: String(item.newValue) })
                     });
-                    
-                    if (res.ok) {
-                        item.value = item.newValue;
-                        showToast("更新成功");
-                    } else {
-                        throw new Error("API Error");
-                    }
-                } catch(e) {
-                    showToast("更新失败", "error");
-                } finally {
-                    item.updating = false;
-                }
+                    if(res.ok) { 
+                        if (item.key === 'site_total_pv') globalTotalPV.value = Number(item.newValue);
+                        item.value = item.newValue; 
+                        showToast("保存成功"); 
+                    } else throw new Error();
+                } catch(e) { showToast("更新失败", 'error'); }
             };
 
-            // 删除
-            const deleteItem = async (key) => {
-                if (!confirm("⚠️ 确定删除这条记录吗？此操作不可恢复。")) return;
-                
-                // 找到对应 item 设置状态
-                const item = items.value.find(i => i.key === key);
-                if(item) item.deleting = true;
-
-                try {
-                    const res = await fetch('/api/admin?action=delete', {
-                        method: 'POST',
-                        headers: { 
-                            'Content-Type': 'application/json',
-                            'X-Auth-Token': password.value 
-                        },
-                        body: JSON.stringify({ key })
-                    });
-                    if (res.ok) {
-                        items.value = items.value.filter(i => i.key !== key);
-                        showToast("删除成功");
-                    } else {
-                        throw new Error("API Error");
-                    }
-                } catch(e) {
-                    showToast("删除失败", "error");
-                    if(item) item.deleting = false;
-                }
+            // UI 辅助
+            const initTheme = () => {
+                const cached = localStorage.getItem('theme');
+                if (cached) theme.value = cached;
+                else if (window.matchMedia('(prefers-color-scheme: dark)').matches) theme.value = 'dark';
+                document.documentElement.setAttribute('data-theme', theme.value);
+            };
+            const toggleTheme = () => {
+                theme.value = theme.value === 'light' ? 'dark' : 'light';
+                document.documentElement.setAttribute('data-theme', theme.value);
+                localStorage.setItem('theme', theme.value);
+            };
+            const showToast = (msg, type = 'success') => {
+                toast.value = { visible: true, msg, icon: type === 'success' ? '✅' : (type === 'error' ? '❌' : '📋') };
+                setTimeout(() => { toast.value.visible = false; }, 2500);
+            };
+            const updateTime = () => { lastUpdateTime.value = new Date().toLocaleTimeString('zh-CN', { hour12: false }); };
+            const formatNumber = (num) => {
+                const n = Number(num);
+                if(n >= 10000) return (n/10000).toFixed(1) + 'w';
+                if(n >= 1000) return (n/1000).toFixed(1) + 'k';
+                return n;
+            };
+            const copy = (text) => { 
+                navigator.clipboard.writeText(text).then(() => showToast("Key 已复制", 'copy')); 
             };
 
-            // 计算属性：前端过滤搜索
-            const filteredItems = computed(() => {
-                if (!searchQuery.value) return items.value;
-                const lowerQ = searchQuery.value.toLowerCase();
-                return items.value.filter(item => 
-                    item.key.toLowerCase().includes(lowerQ) || 
-                    item.decodedUrl.toLowerCase().includes(lowerQ)
-                );
+            const truncateKey = (key) => {
+                if (!key) return '';
+                if (key.length <= 25) return key;
+                // 移动端更短的截断
+                if (window.innerWidth <= 768) {
+                    return key.substring(0, 15) + '...' + key.substring(key.length - 8);
+                }
+                return key.substring(0, 20) + '...' + key.substring(key.length - 8);
+            };
+
+            const decodeKey = (key) => {
+                if (key === 'site_total_pv') return '全站总计 (SYSTEM ROOT)';
+                let cleanKey = key.startsWith('_') ? key.substring(1) : key;
+                const segments = cleanKey.split('_').map(seg => {
+                    if (seg.startsWith('B64:')) {
+                        let b64 = seg.substring(4).replace(/:A/g, '+').replace(/:B/g, '/');
+                        while (b64.length % 4 !== 0) b64 += '=';
+                        try { return new TextDecoder().decode(Uint8Array.from(atob(b64), c => c.charCodeAt(0))); } catch (e) { return seg; }
+                    }
+                    return seg;
+                });
+                let rawPath = '/' + segments.join('/');
+                try { return decodeURIComponent(rawPath); } catch (e) { return rawPath; }
+            };
+
+            // Computed
+            const maxPV = computed(() => {
+                // 计算相对热度条时，排除 total_pv，仅比较页面之间的热度
+                const pages = items.value.filter(i => i.key !== 'site_total_pv');
+                return pages.length ? Math.max(...pages.map(i => Number(i.value) || 0)) : 0;
+            });
+            
+            const topPage = computed(() => {
+                const pages = items.value.filter(i => i.key !== 'site_total_pv');
+                return pages.sort((a,b) => Number(b.value) - Number(a.value))[0];
             });
 
+            const calculateRelative = (val) => maxPV.value ? Math.min(100, (Number(val) / maxPV.value) * 100) : 0;
+            const calculateShare = (val) => globalTotalPV.value ? (Number(val) / globalTotalPV.value) * 100 : 0;
+
             return {
-                isLoggedIn, password, login, logout,
-                items, filteredItems, loadMore, complete, loading, searchQuery, refreshData,
-                updateItem, deleteItem, copyToClipboard, toasts
+                isLoggedIn, password, login, logout, items,
+                currentPageIndex, nextPage, prevPage, complete, resetView,
+                updateItem, deleteItem, copy, truncateKey,
+                globalTotalPV, topPage, fetchError, lastUpdateTime, formatNumber, toast, theme, toggleTheme, loading, 
+                searchQuery, searchMode, searchComplete, triggerSearch, stopSearch, 
+                totalUrlCount, isScanning,
+                calculateRelative, calculateShare
             };
         }
     }).mount('#app');
