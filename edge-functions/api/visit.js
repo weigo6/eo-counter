@@ -1,9 +1,9 @@
 /**
  * api/visit.js
- * 博客访问统计 - 最终生产版
+ * 博客访问统计 - 最终生产版 (多域名支持版)
  * 
  * 功能：
- * 1. 严格的跨域/来源检查 (支持本地调试模式)
+ * 1. 严格的跨域/来源检查 (支持多域名配置，逗号分隔)
  * 2. PV 读取与累加
  * 3. 同步写入 KV
  */
@@ -17,30 +17,48 @@ export async function onRequest(context) {
   const { request, env } = context;
 
   // === 2. 获取配置与请求来源 ===
-  // 环境变量中配置允许的域名。
-  // 生产环境示例: "https://yourblog.com"
-  // 本地测试示例: "*"
-  const allowedOrigin = env.ALLOWED_ORIGIN || ""; 
+  // 环境变量示例: "https://yourblog.com,https://www.yourblog.com,http://localhost:3000"
+  // 本地调试全放行示例: "*"
+  const allowedConfig = env.ALLOWED_ORIGIN || "";
   
+  // 将配置字符串分割为数组，并去除空格
+  const allowedOrigins = allowedConfig.split(",").map(s => s.trim()).filter(Boolean);
+
   // 获取请求来源 (Origin 用于跨域 Fetch, Referer 用于直接页面请求)
   const requestOrigin = request.headers.get("Origin") || request.headers.get("Referer") || "";
 
-  // === 3. 鉴权逻辑 (核心修改) ===
-  let isUnauthorized = false;
+  // === 3. 鉴权逻辑 (支持多域名) ===
+  let isUnauthorized = true; // 默认为未授权
+  let finalAllowOrigin = ""; // 最终返回给浏览器的 CORS Header 值
 
-  if (allowedOrigin === "*") {
-    // 调试模式：允许所有来源 (包括 localhost)
+  if (allowedConfig === "*") {
+    // 调试模式：允许所有
     isUnauthorized = false;
+    finalAllowOrigin = "*";
   } else {
-    // 生产模式：严格检查
-    // A. 如果配置了域名，但请求来源不包含该域名 -> 拒绝
-    if (allowedOrigin && !requestOrigin.includes(allowedOrigin)) {
-      isUnauthorized = true;
+    // 生产模式：遍历白名单
+    for (const allowed of allowedOrigins) {
+      // 只要请求来源包含白名单中的任意一项
+      if (requestOrigin.includes(allowed)) {
+        isUnauthorized = false;
+        // CORS 规范要求：如果允许，Header 必须返回具体的 Origin，而不能是列表
+        // 这里直接返回请求方的 Origin (或者配置的域名)
+        finalAllowOrigin = requestOrigin.startsWith("http") ? new URL(requestOrigin).origin : allowed;
+        break; // 找到匹配项，跳出循环
+      }
     }
-    // B. 显式拒绝 localhost/127.0.0.1，防止环境变量未配置时的泄露
-    if (requestOrigin.includes("localhost") || requestOrigin.includes("127.0.0.1")) {
-      isUnauthorized = true;
-    }
+  }
+
+  // 二次检查：防止未配置任何域名时的意外泄露，且不在调试模式下
+  // 如果 allowedConfig 不为 "*" 且请求的是 localhost，必须显式在白名单里才行
+  if (!isUnauthorized && allowedConfig !== "*") {
+     const isLocal = requestOrigin.includes("localhost") || requestOrigin.includes("127.0.0.1");
+     // 如果请求是本地的，但白名单里没有任何一项包含 localhost/127.0.0.1，则强制拒绝
+     const configHasLocal = allowedOrigins.some(o => o.includes("localhost") || o.includes("127.0.0.1"));
+     
+     if (isLocal && !configHasLocal) {
+        isUnauthorized = true;
+     }
   }
 
   // 拦截非法请求
@@ -54,8 +72,8 @@ export async function onRequest(context) {
 
   // === 4. CORS 头配置 ===
   const corsHeaders = {
-    // 如果是调试模式(*)，允许任意域；否则只允许配置的域或当前请求域
-    "Access-Control-Allow-Origin": allowedOrigin === "*" ? "*" : (allowedOrigin || requestOrigin),
+    // 动态设置允许的来源
+    "Access-Control-Allow-Origin": finalAllowOrigin || requestOrigin,
     "Access-Control-Allow-Methods": "GET, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   };

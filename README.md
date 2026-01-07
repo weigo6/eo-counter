@@ -69,6 +69,14 @@ EO-Counter 是一个基于 **腾讯云 EdgeOne Pages 提供的边缘函数与KV�
      | ---------------- | ------------------------------------------------------------ |
      | `DASHBOARD_PWD`  | 管理员控制台登录密钥。用于 `api/admin.js` 的身份验证（`X-Auth-Token`）。 |
      | `ALLOWED_ORIGIN` | 允许访问 API 的前端域名（用于 CORS）。例如：https://your-blog.com。建议填写你的博客主站域名。设置变量值为“*”时支持全部域名的跨域访问，可能会导致API被盗刷。本地测试时建议设置为`*`，方便验证。 |
+   - ALLOWED_ORIGIN 格式：https://example.com,https://blog.example.com（多个域名用逗号分隔，请勿遗漏`https://`）
+   - ALLOWED_ORIGIN 示例场景如下：
+      - 场景 1：仅生产环境
+          ALLOWED_ORIGIN = https://yourblog.com,https://www.yourblog.com
+      - 场景 2：生产环境 + 本地开发
+          ALLOWED_ORIGIN = https://yourblog.com,http://localhost:3000
+      - 场景 3：完全开放 (仅测试用)
+          ALLOWED_ORIGIN = *
    - ![image-20260102145951845](README.assets/image-20260102145951845.png)
    - > 注意：编辑环境变量后，要使其生效需要在`构建部署`中重新部署项目。
 
